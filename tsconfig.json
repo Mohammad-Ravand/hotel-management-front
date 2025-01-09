@@ -1,0 +1,7 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    "strict": true, // Enables strict type-checking options
+    "types": ["@nuxt/types", "@types/node"]
+  }
+}
