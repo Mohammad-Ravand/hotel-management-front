@@ -9,4 +9,5 @@ export default defineNuxtConfig({
       defaultTheme: 'dark', // Set default theme
     },
   },
+
 })

@@ -10,7 +10,7 @@ import('~/assets/css/theme.css')
   <div class="min-h-screen  flex flex-col justify-between">
     <div>
       <HeaderAppHeader class="py-3" />
-      <main class="mt-10">
+      <main class="">
         <slot />
       </main>
     </div>

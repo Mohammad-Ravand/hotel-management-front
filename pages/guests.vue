@@ -1,91 +1,267 @@
-<script setup lang="ts">
+<script lang="ts" setup>
+// Columns
 const columns = [{
+  key: 'select',
+  class: 'w-2'
+}, {
   key: 'id',
-  label: 'Id'
+  label: '#',
+  sortable: true
 }, {
   key: 'first_name',
-  label: 'First Name'
+  label: 'First Name',
+  sortable: true
 }, {
   key: 'last_name',
-  label: 'Last Name'
+  label: 'Last Name',
+  sortable: true
 }, {
-  key: 'actions'
+  key: 'completed',
+  label: 'Status',
+  sortable: false
+}, {
+  key: 'actions',
+  label: 'Actions',
+  sortable: false
 }]
 
-const people = [{
-  id: 1,
-  first_name: 'Lindsay Walton',
-  last_name: 'Front-end Developer',
-  email: 'lindsay.walton@example.com',
-}, {
-  id: 2,
-  first_name: 'Courtney Henry',
-  last_name: 'Designer',
-}, {
-  id: 3,
-  first_name: 'Tom Cook',
-  last_name: 'Director of Product',
-}, {
-  id: 4,
-  first_name: 'Whitney Francis',
-  last_name: 'Copywriter',
-}, {
-  id: 5,
-  first_name: 'Leonard Krasner',
-  last_name: 'Senior Designer',
-}, {
-  id: 6,
-  first_name: 'Floyd Miles',
-  last_name: 'Principal Designer',
-}]
+const selectedColumns = ref(columns)
+const columnsTable = computed(() => columns.filter(column => selectedColumns.value.includes(column)))
+const excludeSelectColumn = computed(() => columns.filter(v => v.key !== 'select'))
 
-const items = row => [
+// Selected Rows
+const selectedRows = ref([])
+
+function select(row) {
+  const index = selectedRows.value.findIndex(item => item.id === row.id)
+  if (index === -1) {
+    selectedRows.value.push(row)
+  } else {
+    selectedRows.value.splice(index, 1)
+  }
+}
+
+// Actions
+const actions = [
   [{
-    label: 'Edit',
-    icon: 'i-heroicons-pencil-square-20-solid',
-    click: () => console.log('Edit', row.id)
-  }, {
-    label: 'Duplicate',
-    icon: 'i-heroicons-document-duplicate-20-solid'
+    key: 'completed',
+    label: 'Completed',
+    icon: 'i-heroicons-check'
   }], [{
-    label: 'Archive',
-    icon: 'i-heroicons-archive-box-20-solid'
-  }, {
-    label: 'Move',
-    icon: 'i-heroicons-arrow-right-circle-20-solid'
-  }], [{
-    label: 'Delete',
-    icon: 'i-heroicons-trash-20-solid'
+    key: 'uncompleted',
+    label: 'In Progress',
+    icon: 'i-heroicons-arrow-path'
   }]
 ]
 
-const selected = ref([people[1]])
+// Filters
+const todoStatus = [{
+  key: 'uncompleted',
+  label: 'In Progress',
+  value: false
+}, {
+  key: 'completed',
+  label: 'Completed',
+  value: true
+}]
 
+const search = ref('')
+const selectedStatus = ref([])
+const searchStatus = computed(() => {
+  if (selectedStatus.value?.length === 0) {
+    return ''
+  }
 
-const page = ref(1)
-const pageCount = 5
+  if (selectedStatus?.value?.length > 1) {
+    return `?completed=${selectedStatus.value[0].value}&completed=${selectedStatus.value[1].value}`
+  }
 
-const rows = computed(() => {
-  return people.slice((page.value - 1) * pageCount, (page.value) * pageCount)
+  return `?completed=${selectedStatus.value[0].value}`
 })
+
+const resetFilters = () => {
+  search.value = ''
+  selectedStatus.value = []
+}
+
+// Pagination
+const sort = ref({ column: 'id', direction: 'asc' as const })
+const page = ref(1)
+const pageCount = ref(10)
+const pageTotal = ref(200) // This value should be dynamic coming from the API
+const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1)
+const pageTo = computed(() => Math.min(page.value * pageCount.value, pageTotal.value))
+
+// Data
+const { data: guests, status} = await useLazyAsyncData('guests', () => ($fetch as any)(`http://127.0.0.1:8000/api/guests${searchStatus.value}`, {
+  query: {
+    _q: search.value,
+    _page: page.value,
+    _limit: pageCount.value,
+    _sort: sort.value.column,
+    _order: sort.value.direction
+  }
+}), {
+  default: () => [],
+  watch: [page, search, searchStatus, pageCount, sort]
+})
+
+const rows = computed(()=>{
+  return  guests.value.data.data;
+})
+
+watch(()=>{
+  pageTotal.value = guests.value.data.total
+  if(page.value > guests.value.data.to){
+    page.value = guests.value.data.to;
+  }
+},[rows])
+
 </script>
 
 <template>
-  <UTable  singleSelect  :rows="rows"  :columns="columns">
-
-    <template #name-data="{ row }">
-      <span :class="[selected.find(person => person.id === row.id) && 'text-primary-500 dark:text-primary-400']">{{ row.name }}</span>
+  <UCard
+      class="w-full"
+      :ui="{
+      base: '',
+      ring: '',
+      divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+      header: { padding: 'px-4 py-5' },
+      body: { padding: '', base: 'divide-y divide-gray-200 dark:divide-gray-700' },
+      footer: { padding: 'p-4' }
+    }"
+  >
+    <template #header>
+      <h2 class="font-semibold text-xl text-gray-900 dark:text-white leading-tight">
+        guests
+      </h2>
     </template>
 
-    <template #actions-data="{ row }">
-      <UDropdown :items="items(row)">
-        <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
-      </UDropdown>
-    </template>
+    <!-- Filters -->
+    <div class="flex items-center justify-between gap-3 px-4 py-3">
+      <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid" placeholder="Search..." />
 
-    <div class="flex justify-end px-3 py-3.5 border-t border-gray-200 text-white bg-orange-400">
-      <UPagination v-model="page" :page-count="pageCount" :total="people.length" />
+      <USelectMenu v-model="selectedStatus" :options="todoStatus" multiple placeholder="Status" class="w-40" />
     </div>
-  </UTable>
-</template>
 
+    <!-- Header and Action buttons -->
+    <div class="flex justify-between items-center w-full px-4 py-3">
+      <div class="flex items-center gap-1.5">
+        <span class="text-sm leading-5">Rows per page:</span>
+
+        <USelect
+            v-model="pageCount"
+            :options="[3, 5, 10, 20, 30, 40]"
+            class="me-2 w-20"
+            size="xs"
+        />
+      </div>
+
+      <div class="flex gap-1.5 items-center">
+        <UDropdown v-if="selectedRows.length > 1" :items="actions" :ui="{ width: 'w-36' }">
+          <UButton
+              icon="i-heroicons-chevron-down"
+              trailing
+              color="gray"
+              size="xs"
+          >
+            Mark as
+          </UButton>
+        </UDropdown>
+
+        <USelectMenu v-model="selectedColumns" :options="excludeSelectColumn" multiple>
+          <UButton
+              icon="i-heroicons-view-columns"
+              color="gray"
+              size="xs"
+          >
+            Columns
+          </UButton>
+        </USelectMenu>
+
+        <UButton
+            icon="i-heroicons-funnel"
+            color="gray"
+            size="xs"
+            :disabled="search === '' && selectedStatus.length === 0"
+            @click="resetFilters"
+        >
+          Reset
+        </UButton>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <UTable
+        :rows="rows"
+        v-model:sort="sort"
+        v-model="selectedRows"
+        :columns="columnsTable"
+        :loading="status === 'pending'"
+        sort-asc-icon="i-heroicons-arrow-up"
+        sort-desc-icon="i-heroicons-arrow-down"
+        sort-mode="manual"
+        class="w-full"
+        :ui="{ td: { base: 'max-w-[0] truncate' }, default: { checkbox: { color: 'gray' as any } } }"
+        @select="select"
+    >
+      <template #completed-data="{ row }">
+        <UBadge size="xs" :label="row.completed ? 'Completed' : 'In Progress'" :color="row.completed ? 'emerald' : 'orange'" variant="subtle" />
+      </template>
+
+      <template #actions-data="{ row }">
+        <UButton
+            v-if="!row.completed"
+            icon="i-heroicons-check"
+            size="2xs"
+            color="emerald"
+            variant="outline"
+            :ui="{ rounded: 'rounded-full' }"
+            square
+        />
+
+        <UButton
+            v-else
+            icon="i-heroicons-arrow-path"
+            size="2xs"
+            color="orange"
+            variant="outline"
+            :ui="{ rounded: 'rounded-full' }"
+            square
+        />
+      </template>
+    </UTable>
+
+    <!-- Number of rows & Pagination -->
+    <template #footer>
+      <div class="flex flex-wrap justify-between items-center">
+        <div>
+          <span class="text-sm leading-5">
+            Showing
+            <span class="font-medium">{{ pageFrom }}</span>
+            to
+            <span class="font-medium">{{ pageTo }}</span>
+            of
+            <span class="font-medium">{{ pageTotal }}</span>
+            results
+          </span>
+        </div>
+
+        <UPagination
+            v-model="page"
+            :page-count="pageCount"
+            :total="pageTotal"
+            :ui="{
+            wrapper: 'flex items-center gap-1',
+            rounded: '!rounded-full min-w-[32px] justify-center',
+            default: {
+              activeButton: {
+                variant: 'outline'
+              }
+            }
+          }"
+        />
+      </div>
+    </template>
+  </UCard>
+</template>
